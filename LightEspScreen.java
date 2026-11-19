@@ -1,9 +1,11 @@
 package dev.lightesp;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -85,6 +87,29 @@ public class LightEspScreen extends Screen {
 
 		addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
 				.bounds(this.width / 2 - 100, top + 6 * gap + 10, 200, h).build());
+
+		// diagnostics: how far the server actually loads chunks for you
+		Button status = Button.builder(Component.literal(statusText()), b -> {
+		}).bounds(this.width / 2 - 155, top + 7 * gap + 14, 310, h).build();
+		status.active = false;
+		addRenderableWidget(status);
+	}
+
+	private String statusText() {
+		Minecraft mc = this.minecraft;
+		if (mc == null || mc.level == null || mc.player == null) return "Not in a world";
+		int cx = mc.player.blockPosition().getX() >> 4;
+		int cz = mc.player.blockPosition().getZ() >> 4;
+		int r = 0;
+		while (r < 64
+				&& mc.level.getChunk(cx + r + 1, cz, ChunkStatus.FULL, false) != null
+				&& mc.level.getChunk(cx - r - 1, cz, ChunkStatus.FULL, false) != null
+				&& mc.level.getChunk(cx, cz + r + 1, ChunkStatus.FULL, false) != null
+				&& mc.level.getChunk(cx, cz - r - 1, ChunkStatus.FULL, false) != null) {
+			r++;
+		}
+		return "Loaded: " + r + " chunks | Render dist: " + mc.options.renderDistance().get()
+				+ " | Lights: " + LightScanner.count() + " | Storage: " + StorageScanner.count();
 	}
 
 	private void addToggle(int x, int y, int w, String label, BooleanSupplier get, Consumer<Boolean> set) {

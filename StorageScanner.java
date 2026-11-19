@@ -74,6 +74,12 @@ public final class StorageScanner {
 		});
 	}
 
+	public static int count() {
+		int n = 0;
+		for (Entry e : CACHE.values()) n += e.hits.size();
+		return n;
+	}
+
 	public static void clear() {
 		CACHE.clear();
 		QUEUE.clear();

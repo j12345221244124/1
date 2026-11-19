@@ -76,6 +76,12 @@ public final class LightScanner {
 		return state.getLightEmission() > 0 && nameMatches(state.getBlock());
 	}
 
+	public static int count() {
+		int n = 0;
+		for (Entry e : CACHE.values()) n += e.lights.size();
+		return n;
+	}
+
 	public static void clear() {
 		CACHE.clear();
 		QUEUE.clear();
