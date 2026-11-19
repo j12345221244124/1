@@ -1,0 +1,19 @@
+{
+	"schemaVersion": 1,
+	"id": "lightesp",
+	"version": "${version}",
+	"name": "Light ESP",
+	"description": "Client-side: highlights player-made light sources (torches, lanterns, etc.) that are underground.",
+	"authors": ["you"],
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["dev.lightesp.LightEspClient"]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
