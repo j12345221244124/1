@@ -69,7 +69,7 @@ public class LightEspScreen extends Screen {
 
 	@Override
 	public void onClose() {
-		this.minecraft.setScreen(parent);
+		this.minecraft.gui.setScreen(parent);
 	}
 
 	private static class IntSlider extends AbstractSliderButton {
