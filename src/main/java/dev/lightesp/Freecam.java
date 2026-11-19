@@ -5,7 +5,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.ClientInput;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Marker;
 
 /**
@@ -42,7 +42,7 @@ public final class Freecam {
 		if (p == null || mc.level == null) return;
 
 		camLevel = mc.level;
-		cam = new Marker(EntityType.MARKER, mc.level);
+		cam = new Marker(EntityTypes.MARKER, mc.level);
 		cam.setPos(p.getX(), p.getEyeY(), p.getZ());
 		cam.xo = cam.getX();
 		cam.yo = cam.getY();
