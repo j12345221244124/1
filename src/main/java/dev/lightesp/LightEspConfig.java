@@ -12,12 +12,21 @@ public class LightEspConfig {
 	public static final int[] COLORS = {0xFFFFD21F, 0xFF00E5FF, 0xFFFF3B30, 0xFF34C759, 0xFFFFFFFF, 0xFFFF2DF1};
 	public static final String[] COLOR_NAMES = {"Yellow", "Cyan", "Red", "Green", "White", "Magenta"};
 
+	// light ESP
 	public boolean enabled = true;
 	public int range = 96;          // blocks
 	public int minDepth = 4;        // blocks of solid cover above a light for it to count as underground
 	public boolean overworldOnly = true;
 	public boolean filled = true;
 	public int colorIndex = 0;
+
+	// storage / spawner ESP
+	public boolean storageEsp = true;
+	public boolean spawnerEsp = true;
+	public int storageRange = 64;
+
+	// freecam
+	public int freecamSpeed = 5;
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static LightEspConfig instance;
