@@ -1,43 +1,45 @@
 package dev.lightesp;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 public class LightEspClient implements ClientModInitializer {
-	private static KeyBinding menuKey;
-	private static KeyBinding toggleKey;
+	private static KeyMapping menuKey;
+	private static KeyMapping toggleKey;
 
 	@Override
 	public void onInitializeClient() {
 		LightEspConfig.load();
 
-		menuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-				"key.lightesp.menu", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_SHIFT, "category.lightesp"));
-		toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-				"key.lightesp.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_K, "category.lightesp"));
+		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("lightesp", "main"));
+
+		menuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+				"key.lightesp.menu", InputConstants.Type.KEYSYM, InputConstants.KEY_RSHIFT, category));
+		toggleKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+				"key.lightesp.toggle", InputConstants.Type.KEYSYM, InputConstants.KEY_K, category));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			while (menuKey.wasPressed()) {
+			while (menuKey.consumeClick()) {
 				client.setScreen(new LightEspScreen(null));
 			}
-			while (toggleKey.wasPressed()) {
+			while (toggleKey.consumeClick()) {
 				LightEspConfig cfg = LightEspConfig.get();
 				cfg.enabled = !cfg.enabled;
 				if (!cfg.enabled) LightScanner.clear();
 				LightEspConfig.save();
 				if (client.player != null) {
-					client.player.sendMessage(Text.literal("Light ESP: " + (cfg.enabled ? "ON" : "OFF")), true);
+					client.player.sendSystemMessage(Component.literal("Light ESP: " + (cfg.enabled ? "ON" : "OFF")));
 				}
 			}
 			LightScanner.tick(client);
 		});
 
-		WorldRenderEvents.LAST.register(LightRenderer::render);
+		LevelRenderEvents.BEFORE_GIZMOS.register(context -> LightRenderer.render());
 	}
 }

@@ -1,68 +1,79 @@
 package dev.lightesp;
 
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.registry.tag.BlockTags;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.Heightmap;
-import net.minecraft.world.LightType;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.chunk.ChunkSection;
-import net.minecraft.world.chunk.ChunkStatus;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.levelgen.Heightmap;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Finds player-placed light sources that sit underground. Scans loaded chunks a couple
- * per tick and caches the result per chunk, so there is no per-frame world scanning.
+ * Finds player-placed light sources that sit underground. Scans loaded chunks a couple per tick
+ * and caches the result per chunk, so there is no per-frame world scanning.
  */
 public final class LightScanner {
 	private static final class Entry {
+		final int cx, cz;
 		final List<BlockPos> lights;
 		final long scannedAt;
 
-		Entry(List<BlockPos> lights, long scannedAt) {
+		Entry(int cx, int cz, List<BlockPos> lights, long scannedAt) {
+			this.cx = cx;
+			this.cz = cz;
 			this.lights = lights;
 			this.scannedAt = scannedAt;
 		}
 	}
 
 	private static final Map<Long, Entry> CACHE = new HashMap<>();
-	private static final ArrayDeque<ChunkPos> QUEUE = new ArrayDeque<>();
-	private static ClientWorld lastWorld;
+	private static final ArrayDeque<int[]> QUEUE = new ArrayDeque<>();
+	private static final Map<Block, Boolean> NAME_CACHE = new HashMap<>();
+	private static ClientLevel lastLevel;
 	private static int tickCounter;
 
-	// Natural light sources (lava, glow lichen, magma, fire, ...) are deliberately NOT listed.
-	private static final Set<Block> LIGHT_BLOCKS = new HashSet<>(Arrays.asList(
-			Blocks.TORCH, Blocks.WALL_TORCH,
-			Blocks.SOUL_TORCH, Blocks.SOUL_WALL_TORCH,
-			Blocks.REDSTONE_TORCH, Blocks.REDSTONE_WALL_TORCH,
-			Blocks.LANTERN, Blocks.SOUL_LANTERN,
-			Blocks.GLOWSTONE, Blocks.SEA_LANTERN, Blocks.SHROOMLIGHT,
-			Blocks.JACK_O_LANTERN, Blocks.REDSTONE_LAMP,
-			Blocks.CAMPFIRE, Blocks.SOUL_CAMPFIRE,
-			Blocks.END_ROD,
-			Blocks.OCHRE_FROGLIGHT, Blocks.VERDANT_FROGLIGHT, Blocks.PEARLESCENT_FROGLIGHT,
-			Blocks.BEACON, Blocks.CONDUIT, Blocks.RESPAWN_ANCHOR,
-			Blocks.FURNACE, Blocks.BLAST_FURNACE, Blocks.SMOKER,
-			Blocks.COPPER_BULB, Blocks.EXPOSED_COPPER_BULB, Blocks.WEATHERED_COPPER_BULB, Blocks.OXIDIZED_COPPER_BULB,
-			Blocks.WAXED_COPPER_BULB, Blocks.WAXED_EXPOSED_COPPER_BULB, Blocks.WAXED_WEATHERED_COPPER_BULB, Blocks.WAXED_OXIDIZED_COPPER_BULB
-	));
+	// Matched against the block's registry name. Natural light (lava, glow lichen, magma, fire, ...)
+	// is deliberately not in this list.
+	private static final String[] KEYWORDS = {
+			"torch", "lantern", "campfire", "froglight", "candle", "copper_bulb", "end_rod",
+			"glowstone", "shroomlight", "redstone_lamp", "furnace", "smoker",
+			"beacon", "conduit", "respawn_anchor"
+	};
 
 	private LightScanner() {
 	}
 
+	private static long key(int cx, int cz) {
+		return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
+	}
+
+	private static boolean nameMatches(Block block) {
+		return NAME_CACHE.computeIfAbsent(block, b -> {
+			String id = BuiltInRegistries.BLOCK.getKey(b).getPath();
+			if (id.contains("torchflower")) return false;
+			for (String k : KEYWORDS) {
+				if (id.contains(k)) return true;
+			}
+			return false;
+		});
+	}
+
 	public static boolean isArtificialLight(BlockState state) {
-		// getLuminance() > 0 also filters out unlit lamps/furnaces/candles/bulbs.
-		if (state.getLuminance() <= 0) return false;
-		return LIGHT_BLOCKS.contains(state.getBlock()) || state.isIn(BlockTags.CANDLES);
+		// luminance > 0 also filters out unlit lamps / furnaces / candles / bulbs
+		return state.getLightEmission() > 0 && nameMatches(state.getBlock());
 	}
 
 	public static void clear() {
@@ -70,93 +81,95 @@ public final class LightScanner {
 		QUEUE.clear();
 	}
 
-	public static void tick(MinecraftClient mc) {
+	public static void tick(Minecraft mc) {
 		LightEspConfig cfg = LightEspConfig.get();
-		ClientWorld world = mc.world;
-		if (world == null || mc.player == null) {
+		ClientLevel level = mc.level;
+		if (level == null || mc.player == null) {
 			clear();
-			lastWorld = null;
+			lastLevel = null;
 			return;
 		}
-		if (world != lastWorld) {
+		if (level != lastLevel) {
 			clear();
-			lastWorld = world;
+			lastLevel = level;
 		}
 		if (!cfg.enabled) return;
-		if (cfg.overworldOnly && world.getRegistryKey() != World.OVERWORLD) {
+		if (cfg.overworldOnly && level.dimension() != Level.OVERWORLD) {
 			clear();
 			return;
 		}
 
-		if (++tickCounter % 10 == 0) refreshQueue(world, mc.player.getChunkPos(), cfg);
+		if (++tickCounter % 10 == 0) {
+			refreshQueue(level, mc.player.blockPosition().getX() >> 4, mc.player.blockPosition().getZ() >> 4, cfg);
+		}
 
 		for (int i = 0; i < 2 && !QUEUE.isEmpty(); i++) {
-			scan(world, QUEUE.poll(), cfg);
+			int[] c = QUEUE.poll();
+			scan(level, c[0], c[1], cfg);
 		}
 	}
 
-	private static void refreshQueue(ClientWorld world, ChunkPos center, LightEspConfig cfg) {
+	private static void refreshQueue(ClientLevel level, int centerX, int centerZ, LightEspConfig cfg) {
 		int r = (cfg.range >> 4) + 1;
-		long now = world.getTime();
+		long now = level.getGameTime();
 
-		CACHE.keySet().removeIf(key -> Math.abs(ChunkPos.getPackedX(key) - center.x) > r + 1
-				|| Math.abs(ChunkPos.getPackedZ(key) - center.z) > r + 1);
+		CACHE.values().removeIf(e -> Math.abs(e.cx - centerX) > r + 1 || Math.abs(e.cz - centerZ) > r + 1);
 
-		List<ChunkPos> candidates = new ArrayList<>();
+		List<int[]> candidates = new ArrayList<>();
 		for (int dx = -r; dx <= r; dx++) {
 			for (int dz = -r; dz <= r; dz++) {
-				int cx = center.x + dx;
-				int cz = center.z + dz;
-				if (world.getChunk(cx, cz, ChunkStatus.FULL, false) == null) continue;
-				Entry e = CACHE.get(ChunkPos.toLong(cx, cz));
-				if (e == null || now - e.scannedAt > 200) candidates.add(new ChunkPos(cx, cz));
+				int cx = centerX + dx;
+				int cz = centerZ + dz;
+				if (level.getChunk(cx, cz, ChunkStatus.FULL, false) == null) continue;
+				Entry e = CACHE.get(key(cx, cz));
+				if (e == null || now - e.scannedAt > 200) candidates.add(new int[]{cx, cz});
 			}
 		}
-		candidates.sort(Comparator.comparingInt(c -> (c.x - center.x) * (c.x - center.x) + (c.z - center.z) * (c.z - center.z)));
+		candidates.sort(Comparator.comparingInt(c -> (c[0] - centerX) * (c[0] - centerX) + (c[1] - centerZ) * (c[1] - centerZ)));
 		QUEUE.clear();
 		QUEUE.addAll(candidates);
 	}
 
-	private static void scan(ClientWorld world, ChunkPos cp, LightEspConfig cfg) {
-		Chunk chunk = world.getChunk(cp.x, cp.z, ChunkStatus.FULL, false);
+	private static void scan(ClientLevel level, int cx, int cz, LightEspConfig cfg) {
+		ChunkAccess chunk = level.getChunk(cx, cz, ChunkStatus.FULL, false);
 		if (chunk == null) return;
 
 		List<BlockPos> found = new ArrayList<>();
-		ChunkSection[] sections = chunk.getSectionArray();
-		int bottomY = chunk.getBottomY();
-		BlockPos.Mutable pos = new BlockPos.Mutable();
+		LevelChunkSection[] sections = chunk.getSections();
+		int minY = level.getMinY();
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
 		for (int i = 0; i < sections.length; i++) {
-			ChunkSection section = sections[i];
-			if (section == null || section.isEmpty() || !section.hasAny(LightScanner::isArtificialLight)) continue;
-			int baseY = bottomY + (i << 4);
+			LevelChunkSection section = sections[i];
+			if (section == null || section.hasOnlyAir() || !section.maybeHas(LightScanner::isArtificialLight)) continue;
+			int baseY = minY + (i << 4);
 			for (int y = 0; y < 16; y++) {
 				for (int z = 0; z < 16; z++) {
 					for (int x = 0; x < 16; x++) {
 						if (!isArtificialLight(section.getBlockState(x, y, z))) continue;
-						pos.set((cp.x << 4) + x, baseY + y, (cp.z << 4) + z);
-						if (isUnderground(world, pos, cfg)) found.add(pos.toImmutable());
+						pos.set((cx << 4) + x, baseY + y, (cz << 4) + z);
+						if (isUnderground(level, pos, cfg)) found.add(pos.immutable());
 					}
 				}
 			}
 		}
-		CACHE.put(ChunkPos.toLong(cp.x, cp.z), new Entry(found, world.getTime()));
+		CACHE.put(key(cx, cz), new Entry(cx, cz, found, level.getGameTime()));
 	}
 
-	private static boolean isUnderground(ClientWorld world, BlockPos pos, LightEspConfig cfg) {
-		int top = world.getTopY(Heightmap.Type.MOTION_BLOCKING, pos.getX(), pos.getZ());
+	private static boolean isUnderground(ClientLevel level, BlockPos pos, LightEspConfig cfg) {
+		int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ());
 		// need at least minDepth blocks of cover between this block and the surface
 		if (pos.getY() > top - 1 - cfg.minDepth) return false;
-		return world.getLightLevel(LightType.SKY, pos) == 0;
+		return level.getBrightness(LightLayer.SKY, pos) == 0;
 	}
 
-	public static void forEachInRange(Vec3d cam, int range, Consumer<BlockPos> consumer) {
+	public static void forEachInRange(double x, double y, double z, int range, Consumer<BlockPos> consumer) {
 		double r2 = (double) range * range;
 		for (Entry e : CACHE.values()) {
 			for (BlockPos p : e.lights) {
-				double dx = p.getX() + 0.5 - cam.x;
-				double dy = p.getY() + 0.5 - cam.y;
-				double dz = p.getZ() + 0.5 - cam.z;
+				double dx = p.getX() + 0.5 - x;
+				double dy = p.getY() + 0.5 - y;
+				double dz = p.getZ() + 0.5 - z;
 				if (dx * dx + dy * dy + dz * dz <= r2) consumer.accept(p);
 			}
 		}
