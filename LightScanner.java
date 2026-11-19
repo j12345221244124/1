@@ -99,14 +99,17 @@ public final class LightScanner {
 			return;
 		}
 
-		if (++tickCounter % 10 == 0) {
+		if (++tickCounter % 5 == 0) {
 			refreshQueue(level, mc.player.blockPosition().getX() >> 4, mc.player.blockPosition().getZ() >> 4, cfg);
 		}
 
-		for (int i = 0; i < 2 && !QUEUE.isEmpty(); i++) {
+		// scan as many chunks as fit in a ~4 ms budget per tick (closest first), at least one
+		long deadline = System.nanoTime() + 4_000_000L;
+		do {
 			int[] c = QUEUE.poll();
+			if (c == null) break;
 			scan(level, c[0], c[1], cfg);
-		}
+		} while (System.nanoTime() < deadline);
 	}
 
 	private static void refreshQueue(ClientLevel level, int centerX, int centerZ, LightEspConfig cfg) {
