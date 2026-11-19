@@ -20,13 +20,13 @@ public class LightEspClient implements ClientModInitializer {
 		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("lightesp", "main"));
 
 		menuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-				"key.lightesp.menu", InputConstants.Type.KEYSYM, InputConstants.KEY_RSHIFT, category));
+				"key.lightesp.menu", InputConstants.KEY_RSHIFT, category));
 		toggleKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-				"key.lightesp.toggle", InputConstants.Type.KEYSYM, InputConstants.KEY_K, category));
+				"key.lightesp.toggle", InputConstants.KEY_K, category));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (menuKey.consumeClick()) {
-				client.setScreen(new LightEspScreen(null));
+				client.gui.setScreen(new LightEspScreen(null));
 			}
 			while (toggleKey.consumeClick()) {
 				LightEspConfig cfg = LightEspConfig.get();
