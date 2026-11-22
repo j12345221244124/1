@@ -29,6 +29,9 @@ public class LightEspConfig {
 	// freecam
 	public int freecamSpeed = 5;
 
+	// grindstone
+	public boolean autoDisenchant = false;
+
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static LightEspConfig instance;
 

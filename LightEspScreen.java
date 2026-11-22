@@ -85,6 +85,8 @@ public class LightEspScreen extends Screen {
 			LightEspConfig.save();
 		}));
 
+		addToggle(right, y += gap, w, "Auto Disenchant", () -> cfg.autoDisenchant, v -> cfg.autoDisenchant = v);
+
 		addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
 				.bounds(this.width / 2 - 100, top + 6 * gap + 10, 200, h).build());
 

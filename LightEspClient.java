@@ -47,6 +47,7 @@ public class LightEspClient implements ClientModInitializer {
 			Freecam.tick(client);
 			LightScanner.tick(client);
 			StorageScanner.tick(client);
+			AutoDisenchant.tick(client);
 		});
 
 		LevelRenderEvents.BEFORE_GIZMOS.register(context -> {
