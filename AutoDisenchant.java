@@ -6,7 +6,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.tags.EnchantmentTags;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.GrindstoneMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -74,7 +74,7 @@ public class AutoDisenchant {
 	}
 
 	private static void click(Minecraft client, GrindstoneMenu menu, int slot, Player player) {
-		client.gameMode.handleInventoryMouseClick(menu.containerId, slot, 0, ClickType.QUICK_MOVE, player);
+		client.gameMode.handleContainerInput(menu.containerId, slot, 0, ContainerInput.QUICK_MOVE, player);
 		cooldown = CLICK_DELAY_TICKS;
 		if (slot == RESULT) {
 			// repeated result clicks that never clear (full inventory) -> stop
